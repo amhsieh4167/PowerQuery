@@ -1,0 +1,35 @@
+let
+    Source = Excel.CurrentWorkbook(){[Name="Table1"]}[Content],
+    #"Changed Type" = Table.TransformColumnTypes(Source,{{"Order Number", type text}, {"Customer 1", type text}, {"Amount 1", Int64.Type}, {"Customer 2", type text}, {"Amount 2", Int64.Type}, {"Customer 3", type text}, {"Amount 3", Int64.Type}, {"Customer 4", type text}, {"Amount 4", Int64.Type}, {"Customer 5", type text}, {"Amount 5", Int64.Type}, {"Customer 6", type text}, {"Amount 6", Int64.Type}, {"Customer 7", type text}, {"Amount 7", Int64.Type}, {"Customer 8", type text}, {"Amount 8", Int64.Type}, {"Customer 9", type text}, {"Amount 9", Int64.Type}}),
+    /*SplitColumns = List.Split(
+                            List.Skip(
+                                Table.ColumnNames(
+                                    Source
+                                )
+                            ),
+                            2
+                        ), 
+    RenameColumns = Table.SelectColumns( Source, {"Order Number"} & SplitColumns{0}), 
+    */
+    
+    Unpivot = Table.Combine(
+                    List.Transform(
+                        List.Split(
+                            List.Skip(
+                                Table.ColumnNames(
+                                    Source
+                                )
+                            ),
+                            2
+                        ), 
+                    each Table.RenameColumns(
+                            Table.SelectColumns(
+                                Source, 
+                                {"Order Number"} & _), 
+                                List.Zip({_, {"Customer", "Amount"}})
+                        ) 
+                    )
+              ),
+    #"Sorted Rows" = Table.Sort(Unpivot,{{"Order Number", Order.Ascending}})
+in
+    #"Sorted Rows"
