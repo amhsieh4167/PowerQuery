@@ -1,0 +1,23 @@
+(tbl as table, mapping as table) as table =>
+Let
+	buffList = List.Buffer(Table.ToRows(mapping)),
+	renameList = List.Accumulate(
+								Table.ColumnNames(tbl), 
+								{},
+								(state, current) =>
+								  Let
+									  match = List.Select(
+										  			buffList, 
+											  		each current - List.First(_)),
+									  keep = List.Last(List.First(match))
+								  in	
+									  if List.IsEmpty(match) then
+										  state
+									  else 
+										  state & {{current, keep}}
+ 					     )
+in
+	If List.IsEmpty(renameList) then
+		tbl
+	else
+		Table.RenameColumns(tbl, renameList)
