@@ -1,35 +1,34 @@
-let
-    Source = Excel.CurrentWorkbook(){[Name="Table1"]}[Content],
-    #"Changed Type" = Table.TransformColumnTypes(Source,{{"Order Number", type text}, {"Customer 1", type text}, {"Amount 1", Int64.Type}, {"Customer 2", type text}, {"Amount 2", Int64.Type}, {"Customer 3", type text}, {"Amount 3", Int64.Type}, {"Customer 4", type text}, {"Amount 4", Int64.Type}, {"Customer 5", type text}, {"Amount 5", Int64.Type}, {"Customer 6", type text}, {"Amount 6", Int64.Type}, {"Customer 7", type text}, {"Amount 7", Int64.Type}, {"Customer 8", type text}, {"Amount 8", Int64.Type}, {"Customer 9", type text}, {"Amount 9", Int64.Type}}),
-    /*SplitColumns = List.Split(
-                            List.Skip(
-                                Table.ColumnNames(
-                                    Source
-                                )
-                            ),
-                            2
-                        ), 
-    RenameColumns = Table.SelectColumns( Source, {"Order Number"} & SplitColumns{0}), 
-    */
-    
-    Unpivot = Table.Combine(
-                    List.Transform(
-                        List.Split(
-                            List.Skip(
-                                Table.ColumnNames(
-                                    Source
-                                )
-                            ),
-                            2
-                        ), 
-                    each Table.RenameColumns(
-                            Table.SelectColumns(
-                                Source, 
-                                {"Order Number"} & _), 
-                                List.Zip({_, {"Customer", "Amount"}})
-                        ) 
-                    )
-              ),
-    #"Sorted Rows" = Table.Sort(Unpivot,{{"Order Number", Order.Ascending}})
-in
-    #"Sorted Rows"
+(previousStep as table, columnsToUnpivot as list, optional arg_numberOfColumnsToSplit as number) as table =>   
+let    
+    numberOfColumnsToSplit = arg_numberOfColumnsToSplit ?? 2,
+    #"Added Index" = Table.AddIndexColumn(previousStep, "Index", 0, 1, Int64.Type),
+    SplitColumns =  Table.Buffer(
+                        Table.Combine(
+                            List.Transform(
+                                List.Split(
+                                    columnsToUnpivot,
+                                    numberOfColumnsToSplit
+                                ),
+                                each Table.RenameColumns(
+                                        Table.SelectColumns(
+                                            #"Added Index", {"Index"} & _
+                                        ),
+                                        List.Zip({_, {"Charge Type", "Service Amount"}})
+                                     )
+                            )
+                        )
+                    ),
+    #"Filtered out null and 0" = Table.SelectRows(SplitColumns, each ([Service Amount] <> null and [Service Amount] <> 0)),
+    UniqueChargeType = List.Buffer(List.Distinct(#"Filtered out null and 0"[Charge Type])),
+    #"Pivoted Column" = Table.Pivot(#"Filtered out null and 0", UniqueChargeType, "Charge Type", "Service Amount"),
+    RemovePivotedColumns = Table.RemoveColumns(#"Added Index", columnsToUnpivot),
+    MergeBacktoMain = Table.NestedJoin(
+                        RemovePivotedColumns, {"Index"},
+                        #"Pivoted Column", {"Index"},
+                        "Data"
+                      ),
+    ExpandedData = Table.ExpandTableColumn(MergeBacktoMain, "Data", UniqueChargeType),
+    ReplacedNull = Table.ReplaceValue(ExpandedData, null, 0, Replacer.ReplaceValue, UniqueChargeType),
+    RemoveIndex = Table.RemoveColumns(ReplacedNull, {"Index"})
+in    
+    RemoveIndex
